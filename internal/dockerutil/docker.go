@@ -49,6 +49,22 @@ func StopContainer(name string) error {
 	return RemoveContainer(name)
 }
 
+// IsContainerRunning checks if a container with the given name is currently running.
+func IsContainerRunning(name string) bool {
+	cmd := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", name)
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "true"
+}
+
+// ImageExists checks if a Docker image exists locally.
+func ImageExists(image string) bool {
+	cmd := exec.Command("docker", "image", "inspect", image)
+	return cmd.Run() == nil
+}
+
 // PullImage pulls a Docker image via the Docker Engine API, streaming
 // progress to the output channel as human-readable lines like
 // "Downloading  120.5 MB / 557.3 MB".

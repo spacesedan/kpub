@@ -34,6 +34,23 @@ dockers_v2:
     flags:
       - "--pull"
 
+homebrew_casks:
+  - name: kpub
+    binaries:
+      - kpub
+    homepage: "https://github.com/spacesedan/kpub"
+    description: "Telegram chat monitor and ebook pipeline for Kobo"
+    caveats: "Run 'kpub setup' to configure Telegram and Dropbox credentials."
+    hooks:
+      post:
+        install: |
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kpub"]
+    repository:
+      owner: spacesedan
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_msg_template: "Update kpub to {{ .Version }}"
+
 nfpms:
   - package_name: kpub
     maintainer: spacesedan <spacesedan@users.noreply.github.com>
@@ -43,5 +60,6 @@ nfpms:
     formats:
       - deb
       - rpm
+
 changelog:
   sort: asc

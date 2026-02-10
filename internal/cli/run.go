@@ -12,7 +12,8 @@ import (
 type runPhase int
 
 const (
-	runRemoving runPhase = iota
+	runChecking runPhase = iota
+	runRemoving
 	runPulling
 	runStarting
 	runDone
@@ -20,20 +21,28 @@ const (
 
 type runStepDoneMsg struct{ err error }
 
+// runAlreadyRunningMsg signals the container is already running.
+type runAlreadyRunningMsg struct{}
+
+// runSkipPullMsg signals the image exists locally; no pull needed.
+type runSkipPullMsg struct{}
+
 // dockerOutputMsg carries a single line of docker output.
 type dockerOutputMsg string
 
 // RunModel is the Bubbletea model for the `run` command.
 type RunModel struct {
-	dataDir  string
-	detach   bool
-	image    string
-	phase    runPhase
-	spinner  spinner.Model
-	outputCh chan string // receives streaming docker output
-	status   string     // latest output line
-	err      error
-	done     bool
+	dataDir    string
+	detach     bool
+	image      string
+	phase      runPhase
+	spinner    spinner.Model
+	outputCh   chan string // receives streaming docker output
+	status     string     // latest output line
+	skipPull   bool       // true if image already exists locally
+	alreadyRun bool       // true if container is already running
+	err        error
+	done       bool
 }
 
 // NewRunModel creates a new run command model.
@@ -46,14 +55,27 @@ func NewRunModel(dataDir string, detach bool, image string) RunModel {
 		dataDir:  dataDir,
 		detach:   detach,
 		image:    image,
-		phase:    runRemoving,
+		phase:    runChecking,
 		spinner:  s,
 		outputCh: make(chan string, 128),
 	}
 }
 
 func (m RunModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.removeContainer())
+	return tea.Batch(m.spinner.Tick, m.checkState())
+}
+
+// checkState checks if the container is already running and if the image exists.
+func (m RunModel) checkState() tea.Cmd {
+	return func() tea.Msg {
+		if dockerutil.IsContainerRunning("kpub") {
+			return runAlreadyRunningMsg{}
+		}
+		if dockerutil.ImageExists(m.image) {
+			return runSkipPullMsg{}
+		}
+		return runStepDoneMsg{}
+	}
 }
 
 func (m RunModel) listenOutput() tea.Cmd {
@@ -97,6 +119,14 @@ func (m RunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
+	case runAlreadyRunningMsg:
+		m.alreadyRun = true
+		m.done = true
+		return m, tea.Quit
+	case runSkipPullMsg:
+		m.skipPull = true
+		m.phase = runRemoving
+		return m, m.removeContainer()
 	case dockerOutputMsg:
 		line := string(msg)
 		if line != "" {
@@ -111,7 +141,21 @@ func (m RunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		switch m.phase {
+		case runChecking:
+			// Image doesn't exist, need to pull.
+			m.phase = runRemoving
+			return m, m.removeContainer()
 		case runRemoving:
+			if m.skipPull {
+				// Image exists locally, go straight to start.
+				if !m.detach {
+					m.phase = runStarting
+					m.done = true
+					return m, tea.Quit
+				}
+				m.phase = runStarting
+				return m, m.startContainer()
+			}
 			m.phase = runPulling
 			return m, tea.Batch(m.pullImage(), m.listenOutput())
 		case runPulling:
@@ -137,6 +181,10 @@ func (m RunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m RunModel) View() string {
 	if m.done {
+		if m.alreadyRun {
+			return "\n" + Warning.Render("  Container 'kpub' is already running.") + "\n" +
+				"  " + Dim.Render("Use 'kpub stop' to stop it, or 'kpub reload' to restart.") + "\n\n"
+		}
 		if m.err != nil {
 			return "\n" + Error.Render("  Error: "+m.err.Error()) + "\n\n"
 		}
@@ -150,14 +198,17 @@ func (m RunModel) View() string {
 	var b strings.Builder
 	b.WriteString("\n")
 
-	steps := []struct {
+	type step struct {
 		label string
 		phase runPhase
-	}{
-		{"Removing old container...", runRemoving},
-		{"Pulling " + m.image + "...", runPulling},
-		{"Starting container...", runStarting},
 	}
+
+	var steps []step
+	steps = append(steps, step{"Removing old container...", runRemoving})
+	if !m.skipPull {
+		steps = append(steps, step{"Pulling " + m.image + "...", runPulling})
+	}
+	steps = append(steps, step{"Starting container...", runStarting})
 
 	for _, s := range steps {
 		if m.phase > s.phase {
@@ -185,7 +236,7 @@ func (m RunModel) View() string {
 // NeedsForegroundRun returns true if the model completed the pull phase
 // and needs a foreground docker run (i.e., not detached).
 func (m RunModel) NeedsForegroundRun() bool {
-	return m.done && m.err == nil && !m.detach && m.phase == runStarting
+	return m.done && m.err == nil && !m.alreadyRun && !m.detach && m.phase == runStarting
 }
 
 // RunForeground executes docker run in the foreground, taking over the terminal.
