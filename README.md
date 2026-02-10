@@ -23,7 +23,9 @@ A Telegram chat monitor and ebook pipeline — watches your Telegram chats for e
 
 > **Contributing:** This repository is not open for contributions. You are welcome to fork it and do whatever you want with it under the terms of the [MIT License](LICENSE).
 
-If you find this useful, consider [buying me a coffee](https://ko-fi.com/spacesedan).
+If you find this useful:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/B0B81TXLK2)
 
 ## Install
 
@@ -92,7 +94,7 @@ This walks you through 5 steps:
 2. **Dropbox app credentials** — enter your `app_key` and `app_secret` from the [Dropbox App Console](https://www.dropbox.com/developers/apps)
 3. **Dropbox authorization** — the wizard opens your browser to authorize the app, then you paste the code back
 4. **Chat configuration** — add one or more chat handles to monitor (e.g. `@ebook-bot`)
-5. **Review and save** — confirm and write `data/config.yaml` + `data/dropbox.json`
+5. **Review and save** — confirm and write `~/.config/kpub/config.yaml` + `~/.config/kpub/dropbox.json`
 
 You can type `back` or press `Esc` at any step to return to the previous step. Press `Ctrl+C` to cancel.
 
@@ -194,14 +196,14 @@ kpub chat remove    # Remove a chat by handle
 | Command      | Flag         | Default            | Description                              |
 |--------------|--------------|--------------------|------------------------------------------|
 | (root)       | `--config`   | `/data/config.yaml`| Path to config file                      |
-| setup        | `--data-dir` | `data`             | Directory for config.yaml and dropbox.json |
-| run          | `--data-dir` | `data`             | Directory to bind-mount as /data         |
+| setup        | `--data-dir` | `~/.config/kpub`   | Directory for config.yaml and dropbox.json |
+| run          | `--data-dir` | `~/.config/kpub`   | Directory to bind-mount as /data         |
 | run          | `--detach`   | `false`            | Run container in the background          |
 | stop         | —            | —                  | No flags                                 |
-| reload       | `--data-dir` | `data`             | Directory to bind-mount as /data         |
-| update       | `--data-dir` | `data`             | Directory to bind-mount (used with --restart) |
+| reload       | `--data-dir` | `~/.config/kpub`   | Directory to bind-mount as /data         |
+| update       | `--data-dir` | `~/.config/kpub`   | Directory to bind-mount (used with --restart) |
 | update       | `--restart`  | `false`            | Restart container after pulling          |
-| chat (all)   | `--data-dir` | `data`             | Directory containing config.yaml         |
+| chat (all)   | `--data-dir` | `~/.config/kpub`   | Directory containing config.yaml         |
 
 ## How It Works
 

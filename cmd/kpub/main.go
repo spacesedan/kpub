@@ -23,6 +23,15 @@ var version = "dev"
 
 const imageName = "ghcr.io/spacesedan/kpub"
 
+// defaultDataDir returns ~/.config/kpub, creating it if needed.
+func defaultDataDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "data"
+	}
+	return filepath.Join(home, ".config", "kpub")
+}
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:     "kpub",
@@ -38,7 +47,7 @@ func main() {
 		Short: "Interactive setup wizard to generate config.yaml and dropbox.json",
 		RunE:  runSetup,
 	}
-	setupCmd.Flags().String("data-dir", "data", "directory for config.yaml and dropbox.json")
+	setupCmd.Flags().String("data-dir", defaultDataDir(), "directory for config.yaml and dropbox.json")
 
 	// --- run ---
 	runCmd := &cobra.Command{
@@ -46,7 +55,7 @@ func main() {
 		Short: "Pull image and start the container",
 		RunE:  runRun,
 	}
-	runCmd.Flags().String("data-dir", "data", "directory to bind-mount as /data")
+	runCmd.Flags().String("data-dir", defaultDataDir(), "directory to bind-mount as /data")
 	runCmd.Flags().BoolP("detach", "d", false, "run container in the background")
 
 	// --- update ---
@@ -56,7 +65,7 @@ func main() {
 		RunE:  runUpdate,
 	}
 	updateCmd.Flags().Bool("restart", false, "restart container after pulling")
-	updateCmd.Flags().String("data-dir", "data", "directory to bind-mount as /data (used with --restart)")
+	updateCmd.Flags().String("data-dir", defaultDataDir(), "directory to bind-mount as /data (used with --restart)")
 
 	// --- stop ---
 	stopCmd := &cobra.Command{
@@ -71,14 +80,14 @@ func main() {
 		Short: "Restart the container to pick up config changes",
 		RunE:  runReload,
 	}
-	reloadCmd.Flags().String("data-dir", "data", "directory to bind-mount as /data")
+	reloadCmd.Flags().String("data-dir", defaultDataDir(), "directory to bind-mount as /data")
 
 	// --- chat ---
 	chatCmd := &cobra.Command{
 		Use:   "chat",
 		Short: "Manage monitored chat configurations",
 	}
-	chatCmd.PersistentFlags().String("data-dir", "data", "directory containing config.yaml")
+	chatCmd.PersistentFlags().String("data-dir", defaultDataDir(), "directory containing config.yaml")
 
 	chatAddCmd := &cobra.Command{
 		Use:   "add",
