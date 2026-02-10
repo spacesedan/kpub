@@ -102,6 +102,9 @@ func runStreaming(cmd *exec.Cmd, output chan<- string) error {
 
 	scanner := bufio.NewScanner(pr)
 	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
+	// Docker pull uses \r to overwrite progress in-place. Split on both
+	// \r and \n so we see intermediate progress (e.g. "Downloading 12MB/45MB").
+	scanner.Split(scanCRLF)
 	var lastLines []string
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -117,6 +120,30 @@ func runStreaming(cmd *exec.Cmd, output chan<- string) error {
 		return fmt.Errorf("%w\n%s", err, tail)
 	}
 	return nil
+}
+
+// scanCRLF is a bufio.SplitFunc that splits on \n, \r\n, or bare \r.
+// This lets us capture Docker's carriage-return progress updates.
+func scanCRLF(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	for i := 0; i < len(data); i++ {
+		if data[i] == '\n' {
+			return i + 1, data[:i], nil
+		}
+		if data[i] == '\r' {
+			// \r\n counts as one line break.
+			if i+1 < len(data) && data[i+1] == '\n' {
+				return i + 2, data[:i], nil
+			}
+			return i + 1, data[:i], nil
+		}
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
 }
 
 // appendCapped appends s to lines, keeping at most n entries.

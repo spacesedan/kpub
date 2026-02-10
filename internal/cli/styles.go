@@ -89,6 +89,7 @@ func FilterDockerLine(line string) (string, bool) {
 		if strings.Contains(actionLower, "already exists") ||
 			strings.Contains(actionLower, "waiting") ||
 			strings.Contains(actionLower, "verifying checksum") ||
+			strings.Contains(actionLower, "download complete") ||
 			actionLower == "pulling fs layer" {
 			return "", false
 		}
@@ -96,8 +97,7 @@ func FilterDockerLine(line string) (string, bool) {
 		// Show meaningful progress: "Downloading 12.3MB/45.6MB", "Extracting 100%", "Pull complete"
 		if strings.Contains(actionLower, "downloading") ||
 			strings.Contains(actionLower, "extracting") ||
-			strings.Contains(actionLower, "pull complete") ||
-			strings.Contains(actionLower, "download complete") {
+			strings.Contains(actionLower, "pull complete") {
 			return action, true
 		}
 
