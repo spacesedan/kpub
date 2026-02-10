@@ -1,0 +1,14 @@
+.git
+data
+docs
+*.md
+.env
+.dockerignore
+.gitignore
+config.yaml
+config.example.yaml
+LICENSE
+cmd
+internal
+go.mod
+go.sum

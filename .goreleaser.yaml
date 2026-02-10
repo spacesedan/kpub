@@ -1,0 +1,52 @@
+project_name: kpub
+
+builds:
+  - main: ./cmd/kpub
+    binary: kpub
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+dockers:
+  - image_templates:
+      - "ghcr.io/spacesedan/kpub:{{ .Version }}"
+      - "ghcr.io/spacesedan/kpub:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--pull"
+    extra_files:
+      - kpub
+    goos: linux
+    goarch: amd64
+
+nfpms:
+  - package_name: kpub
+    homepage: https://github.com/spacesedan/kpub
+    description: Telegram chat monitor and ebook pipeline for Kobo
+    license: MIT
+    formats: [deb, rpm]
+
+brews:
+  - repository:
+      owner: spacesedan
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/spacesedan/kpub
+    description: Telegram chat monitor and ebook pipeline for Kobo
+    license: MIT
+    dependencies:
+      - name: docker
+        type: optional
+
+changelog:
+  sort: asc

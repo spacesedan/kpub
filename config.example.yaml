@@ -1,0 +1,35 @@
+# kpub configuration
+# Copy this file to config.yaml and fill in your values.
+
+telegram:
+  # Get these from https://my.telegram.org/apps
+  app_id: 12345678
+  app_hash: "your-app-hash-here"
+
+# Global defaults (applied to all chats unless overridden)
+defaults:
+  accepted_formats: [".epub", ".mobi", ".azw3"]
+  storage:
+    type: dropbox
+    dropbox:
+      app_key: "your-dropbox-app-key"
+      app_secret: "your-dropbox-app-secret"
+      token_file: "/data/dropbox.json"       # Path to OAuth token JSON
+      upload_path: "/Apps/Rakuten Kobo/"      # Dropbox upload directory
+
+# Working directories inside the container
+paths:
+  download_dir: "/data/downloads"
+  converted_dir: "/data/converted"
+
+# Telegram chats to monitor for ebook files (bots, groups, or channels)
+chats:
+  - handle: "@ebook-bot"
+    # Uses all global defaults above
+
+  # Example: a second chat with format overrides
+  # - handle: "@another-bot"
+  #   accepted_formats: [".epub"]             # Only accept .epub files
+  #   storage:
+  #     dropbox:
+  #       upload_path: "/Apps/Rakuten Kobo/Fiction/"  # Custom upload path

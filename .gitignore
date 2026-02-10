@@ -1,1 +1,7 @@
 .env
+config.yaml
+data/
+*.json
+!config.example.yaml
+!go.sum
+/kpub
