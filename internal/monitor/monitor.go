@@ -274,7 +274,7 @@ func (m *Monitor) processFile(ctx context.Context, doc *tg.Document, fileName st
 	_, err := m.downloader.Download(m.api, location).ToPath(ctx, downloadPath)
 	if err != nil {
 		m.logger.Error("Failed to download file", slog.Any("reason", err))
-		m.notify(ctx, fmt.Sprintf("[kpub] Failed to process '%s'.", fileName))
+		m.notify(ctx, fmt.Sprintf("[kpub] Failed to download '%s': %s", fileName, shortError(err)))
 		return
 	}
 
@@ -285,7 +285,7 @@ func (m *Monitor) processFile(ctx context.Context, doc *tg.Document, fileName st
 		m.logger.Error("Failed to convert to KEPUB",
 			slog.String("fileName", fileName),
 			slog.String("reason", err.Error()))
-		m.notify(ctx, fmt.Sprintf("[kpub] Failed to process '%s'.", fileName))
+		m.notify(ctx, fmt.Sprintf("[kpub] Failed to convert '%s': %s", fileName, shortError(err)))
 		return
 	}
 	defer os.Remove(kepubPath)
@@ -296,7 +296,7 @@ func (m *Monitor) processFile(ctx context.Context, doc *tg.Document, fileName st
 	err = chat.uploader.Upload(ctx, kepubPath, remoteName)
 	if err != nil {
 		m.logger.Error("Failed to upload", slog.String("reason", err.Error()))
-		m.notify(ctx, fmt.Sprintf("[kpub] Failed to process '%s'.", fileName))
+		m.notify(ctx, fmt.Sprintf("[kpub] Failed to upload '%s': %s", fileName, shortError(err)))
 		return
 	}
 
@@ -311,6 +311,22 @@ func (m *Monitor) notify(ctx context.Context, text string) {
 		Message:  text,
 		RandomID: time.Now().UnixNano(),
 	})
+}
+
+// shortError returns a short, user-friendly message from an error.
+// If the error contains a multi-line traceback (e.g. from ebook-convert),
+// it returns the last non-empty line which is usually the root cause.
+func shortError(err error) string {
+	msg := err.Error()
+	lines := strings.Split(msg, "\n")
+	// Walk backwards to find the last non-empty line.
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line != "" {
+			return line
+		}
+	}
+	return msg
 }
 
 // peerKey returns a string key for a PeerClass ("u123" for users, "c456" for
