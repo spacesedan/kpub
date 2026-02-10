@@ -43,18 +43,5 @@ nfpms:
     formats:
       - deb
       - rpm
-
-homebrew_casks:
-  - name: kpub
-    repository:
-      owner: spacesedan
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    homepage: https://github.com/spacesedan/kpub
-    description: Telegram chat monitor and ebook pipeline for Kobo
-    license: MIT
-    dependencies:
-      - formula: docker
-
 changelog:
   sort: asc

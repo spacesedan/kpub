@@ -47,7 +47,7 @@ func StopContainer(name string) error {
 // PullImage pulls a Docker image.
 // Each line of output is sent to the output channel (if non-nil).
 func PullImage(image string, output chan<- string) error {
-	cmd := exec.Command("docker", "pull", image)
+	cmd := exec.Command("docker", "pull", "--platform", "linux/amd64", image)
 	return runStreaming(cmd, output)
 }
 
@@ -55,7 +55,7 @@ func PullImage(image string, output chan<- string) error {
 // If detach is true, the container runs in the background (output suppressed).
 // If foreground, stdout/stderr/stdin are attached to the terminal.
 func RunContainer(name, image, dataDir string, detach bool) error {
-	args := []string{"run", "--name", name}
+	args := []string{"run", "--platform", "linux/amd64", "--name", name}
 	if detach {
 		args = append(args, "-d")
 	} else {
