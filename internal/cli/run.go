@@ -154,7 +154,7 @@ func (m RunModel) View() string {
 		phase runPhase
 	}{
 		{"Removing old container...", runRemoving},
-		{"Pulling image...", runPulling},
+		{"Pulling " + m.image + "...", runPulling},
 		{"Starting container...", runStarting},
 	}
 

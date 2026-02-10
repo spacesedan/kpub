@@ -79,7 +79,32 @@ func FilterDockerLine(line string) (string, bool) {
 		return trimmed, true
 	}
 
-	// Legacy builder / pull output: skip redundant status lines.
+	// Docker pull output: "abc123: Downloading 12.3MB/45.6MB" or "abc123: Pull complete"
+	// Strip the layer hash prefix and show just the action + progress.
+	if parts := strings.SplitN(trimmed, ": ", 2); len(parts) == 2 {
+		action := strings.TrimSpace(parts[1])
+		actionLower := strings.ToLower(action)
+
+		// Skip noisy status lines.
+		if strings.Contains(actionLower, "already exists") ||
+			strings.Contains(actionLower, "waiting") ||
+			strings.Contains(actionLower, "verifying checksum") ||
+			actionLower == "pulling fs layer" {
+			return "", false
+		}
+
+		// Show meaningful progress: "Downloading 12.3MB/45.6MB", "Extracting 100%", "Pull complete"
+		if strings.Contains(actionLower, "downloading") ||
+			strings.Contains(actionLower, "extracting") ||
+			strings.Contains(actionLower, "pull complete") ||
+			strings.Contains(actionLower, "download complete") {
+			return action, true
+		}
+
+		return action, true
+	}
+
+	// Skip other noisy lines.
 	if strings.Contains(lower, "already exists") ||
 		strings.Contains(lower, "waiting") {
 		return "", false

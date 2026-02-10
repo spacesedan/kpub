@@ -149,7 +149,7 @@ func (m UpdateModel) View() string {
 	}
 
 	steps := []viewStep{
-		{"Pulling latest kpub image...", updatePulling},
+		{"Pulling " + m.image + "...", updatePulling},
 	}
 	if m.restart {
 		steps = append(steps, viewStep{"Restarting container...", updateRestarting})
