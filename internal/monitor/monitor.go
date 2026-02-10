@@ -156,9 +156,6 @@ func (m *Monitor) handleMessage(ctx context.Context, e tg.Entities, update *tg.U
 	if !ok {
 		return nil
 	}
-	if msg.Out {
-		return nil
-	}
 
 	var key string
 	switch p := msg.PeerID.(type) {
@@ -185,9 +182,6 @@ func (m *Monitor) handleMessage(ctx context.Context, e tg.Entities, update *tg.U
 func (m *Monitor) handleChannelMessage(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
 	msg, ok := update.Message.(*tg.Message)
 	if !ok {
-		return nil
-	}
-	if msg.Out {
 		return nil
 	}
 
