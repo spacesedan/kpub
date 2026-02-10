@@ -1,8 +1,13 @@
 package dockerutil
 
 import (
-	"bufio"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -44,11 +49,182 @@ func StopContainer(name string) error {
 	return RemoveContainer(name)
 }
 
-// PullImage pulls a Docker image.
-// Each line of output is sent to the output channel (if non-nil).
+// PullImage pulls a Docker image via the Docker Engine API, streaming
+// progress to the output channel as human-readable lines like
+// "Downloading  120.5 MB / 557.3 MB".
 func PullImage(image string, output chan<- string) error {
-	cmd := exec.Command("docker", "pull", "--platform", "linux/amd64", image)
-	return runStreaming(cmd, output)
+	name, tag := parseImageRef(image)
+
+	sock := dockerSocket()
+	httpc := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", sock)
+			},
+		},
+	}
+
+	params := url.Values{}
+	params.Set("fromImage", name)
+	params.Set("tag", tag)
+	params.Set("platform", "linux/amd64")
+
+	resp, err := httpc.Post("http://localhost/v1.41/images/create?"+params.Encode(), "", nil)
+	if err != nil {
+		return fmt.Errorf("pull request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("pull failed (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	tracker := &pullTracker{
+		layers: make(map[string]*layerProgress),
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	for decoder.More() {
+		var evt pullEvent
+		if err := decoder.Decode(&evt); err != nil {
+			break
+		}
+		if evt.Error != "" {
+			return fmt.Errorf("pull: %s", evt.Error)
+		}
+		if output != nil {
+			tracker.update(evt)
+			output <- tracker.render()
+		}
+	}
+	return nil
+}
+
+// pullEvent represents a single JSON event from the Docker pull stream.
+type pullEvent struct {
+	Status         string         `json:"status"`
+	ID             string         `json:"id"`
+	Progress       string         `json:"progress"`
+	ProgressDetail progressDetail `json:"progressDetail"`
+	Error          string         `json:"error"`
+}
+
+type progressDetail struct {
+	Current int64 `json:"current"`
+	Total   int64 `json:"total"`
+}
+
+type layerProgress struct {
+	status  string
+	current int64
+	total   int64
+}
+
+// pullTracker maintains per-layer state and renders a Docker-style view.
+type pullTracker struct {
+	ids    []string // insertion order
+	layers map[string]*layerProgress
+	header string // top-level status like "Pulling from ..."
+}
+
+func (t *pullTracker) update(evt pullEvent) {
+	if evt.ID == "" {
+		// Top-level status lines.
+		if evt.Status != "" {
+			t.header = evt.Status
+		}
+		return
+	}
+
+	lp, ok := t.layers[evt.ID]
+	if !ok {
+		lp = &layerProgress{}
+		t.layers[evt.ID] = lp
+		t.ids = append(t.ids, evt.ID)
+	}
+
+	lp.status = evt.Status
+	lp.current = evt.ProgressDetail.Current
+	lp.total = evt.ProgressDetail.Total
+}
+
+func (t *pullTracker) render() string {
+	var b strings.Builder
+
+	if t.header != "" {
+		b.WriteString(t.header)
+		b.WriteByte('\n')
+	}
+
+	var totalBytes, currentBytes int64
+
+	for _, id := range t.ids {
+		lp := t.layers[id]
+		short := id
+		if len(short) > 12 {
+			short = short[:12]
+		}
+
+		switch strings.ToLower(lp.status) {
+		case "downloading":
+			if lp.total > 0 {
+				pct := float64(lp.current) / float64(lp.total) * 100
+				fmt.Fprintf(&b, "%s: Downloading  %.1f / %.1f MB  (%.0f%%)\n",
+					short,
+					float64(lp.current)/1e6,
+					float64(lp.total)/1e6,
+					pct)
+				totalBytes += lp.total
+				currentBytes += lp.current
+			} else {
+				fmt.Fprintf(&b, "%s: Downloading\n", short)
+			}
+		case "extracting":
+			if lp.total > 0 {
+				pct := float64(lp.current) / float64(lp.total) * 100
+				fmt.Fprintf(&b, "%s: Extracting   %.1f / %.1f MB  (%.0f%%)\n",
+					short,
+					float64(lp.current)/1e6,
+					float64(lp.total)/1e6,
+					pct)
+			} else {
+				fmt.Fprintf(&b, "%s: Extracting\n", short)
+			}
+		default:
+			fmt.Fprintf(&b, "%s: %s\n", short, lp.status)
+		}
+	}
+
+	// Aggregate download summary at the bottom.
+	if totalBytes > 0 {
+		pct := float64(currentBytes) / float64(totalBytes) * 100
+		fmt.Fprintf(&b, "Total: %.1f / %.1f MB  (%.0f%%)",
+			float64(currentBytes)/1e6, float64(totalBytes)/1e6, pct)
+	}
+
+	return b.String()
+}
+
+// parseImageRef splits "ghcr.io/spacesedan/kpub:latest" into name and tag.
+func parseImageRef(image string) (name, tag string) {
+	if i := strings.LastIndex(image, ":"); i > 0 {
+		afterColon := image[i+1:]
+		if !strings.Contains(afterColon, "/") {
+			return image[:i], afterColon
+		}
+	}
+	return image, "latest"
+}
+
+// dockerSocket returns the path to the Docker daemon Unix socket.
+func dockerSocket() string {
+	if h := os.Getenv("DOCKER_HOST"); h != "" {
+		if strings.HasPrefix(h, "unix://") {
+			return strings.TrimPrefix(h, "unix://")
+		}
+	}
+	return "/var/run/docker.sock"
 }
 
 // RunContainer starts a container with the given name, image, and data directory bind mount.
@@ -79,78 +255,4 @@ func RunContainer(name, image, dataDir string, detach bool) error {
 		return fmt.Errorf("running container %q: %w", name, err)
 	}
 	return nil
-}
-
-// runStreaming runs a command and streams its combined stdout/stderr
-// line-by-line to the output channel.
-func runStreaming(cmd *exec.Cmd, output chan<- string) error {
-	// Use a pipe to combine stdout and stderr.
-	pr, pw, err := os.Pipe()
-	if err != nil {
-		return fmt.Errorf("creating pipe: %w", err)
-	}
-	cmd.Stdout = pw
-	cmd.Stderr = pw
-
-	if err := cmd.Start(); err != nil {
-		pr.Close()
-		pw.Close()
-		return fmt.Errorf("starting command: %w", err)
-	}
-	// Close the write end in the parent so the scanner sees EOF when the child exits.
-	pw.Close()
-
-	scanner := bufio.NewScanner(pr)
-	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
-	// Docker pull uses \r to overwrite progress in-place. Split on both
-	// \r and \n so we see intermediate progress (e.g. "Downloading 12MB/45MB").
-	scanner.Split(scanCRLF)
-	var lastLines []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		lastLines = appendCapped(lastLines, line, 10)
-		if output != nil {
-			output <- line
-		}
-	}
-	pr.Close()
-
-	if err := cmd.Wait(); err != nil {
-		tail := strings.Join(lastLines, "\n")
-		return fmt.Errorf("%w\n%s", err, tail)
-	}
-	return nil
-}
-
-// scanCRLF is a bufio.SplitFunc that splits on \n, \r\n, or bare \r.
-// This lets us capture Docker's carriage-return progress updates.
-func scanCRLF(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-	for i := 0; i < len(data); i++ {
-		if data[i] == '\n' {
-			return i + 1, data[:i], nil
-		}
-		if data[i] == '\r' {
-			// \r\n counts as one line break.
-			if i+1 < len(data) && data[i+1] == '\n' {
-				return i + 2, data[:i], nil
-			}
-			return i + 1, data[:i], nil
-		}
-	}
-	if atEOF {
-		return len(data), data, nil
-	}
-	return 0, nil, nil
-}
-
-// appendCapped appends s to lines, keeping at most n entries.
-func appendCapped(lines []string, s string, n int) []string {
-	lines = append(lines, s)
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return lines
 }

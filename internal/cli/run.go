@@ -98,8 +98,9 @@ func (m RunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case dockerOutputMsg:
-		if clean, ok := FilterDockerLine(string(msg)); ok {
-			m.status = clean
+		line := string(msg)
+		if line != "" {
+			m.status = line
 		}
 		return m, m.listenOutput()
 	case runStepDoneMsg:
@@ -169,7 +170,12 @@ func (m RunModel) View() string {
 	}
 
 	if m.status != "" {
-		b.WriteString("\n  " + Dim.Render(TruncateLine(m.status, 72)) + "\n")
+		b.WriteString("\n")
+		for _, line := range strings.Split(m.status, "\n") {
+			if line != "" {
+				b.WriteString("  " + Dim.Render(line) + "\n")
+			}
+		}
 	}
 
 	b.WriteString("\n")
