@@ -207,11 +207,13 @@ kpub chat remove    # Remove a chat by handle
 
 ## How It Works
 
-kpub is a single Go binary that runs inside a Docker image based on [linuxserver/calibre](https://github.com/linuxserver/docker-calibre). The pre-built image is published to GHCR (`ghcr.io/spacesedan/kpub`) — `kpub run` pulls it and starts the container.
+kpub is a single Go binary that runs inside a lightweight Docker image (`ghcr.io/spacesedan/kpub`). The image is based on Ubuntu 24.04 with only Calibre's CLI tools installed — no desktop environment, no GUI. This gives access to `ebook-convert` for format conversion in a ~500MB image.
+
+`kpub run` pulls the pre-built image and starts the container with your `~/.config/kpub` directory bind-mounted as `/data`.
 
 1. The server connects to Telegram as your user account (single MTProto session)
-2. It resolves each configured chat handle and monitors incoming messages
-3. When a document appears in a monitored chat, the server downloads it via MTProto
+2. It monitors configured chats for ebook files — including files you send yourself
+3. When a document appears, the server downloads it via MTProto
 4. The file is converted to `.kepub.epub` using Calibre's `ebook-convert`
 5. The converted file is uploaded to Dropbox (syncs to your Kobo via the Dropbox app)
 6. Status notifications are sent to your Saved Messages
