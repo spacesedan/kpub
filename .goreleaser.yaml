@@ -33,7 +33,6 @@ dockers_v2:
       - linux/amd64
     flags:
       - "--pull"
-    attestations: false
 
 nfpms:
   - package_name: kpub
