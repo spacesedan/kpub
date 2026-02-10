@@ -42,5 +42,5 @@ The session is saved to `/data/session.json`. Subsequent runs skip authenticatio
 - The `app_id` and `app_hash` identify your application to Telegram
 - No bot tokens are needed — the server authenticates as your user account
 - The server only monitors incoming messages in the configured chats
-- Messages you send yourself are ignored
+- Messages you send to a monitored chat are also processed
 - Status notifications go to your Saved Messages
